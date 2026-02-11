@@ -99,10 +99,15 @@ To train or evaluate specifically on the Anti-UAV 410 Dataset, use the following
 
 - For Train & Evaluation: Add `--mixin anti_uav_train --mixin anti_uav_test`
 
-- For Evaluation Only: Add `--mixin anti_uav_test`
+- For Evaluation Only: Add `--mixin anti_uav_test --mixin evaluation`
 ```shell
 # Train and evaluate MemLoTrack model on all GPUs
 ./run.sh MemLoTrack dinov2 --mixin anti_uav_train --mixin anti_uav_test --output_dir /path/to/output
+```
+
+```shell
+# Only evaluate MemLoTrack model on all GPUs
+./run.sh MemLoTrack dinov2 --mixin anti_uav_test --mixin evaluation --output_dir /path/to/output --weight_path /path/to/weight
 ```
 
 
