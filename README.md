@@ -160,7 +160,7 @@ pip install torchvision===0.10.1 -f https://download.pytorch.org/whl/torch_stabl
    # Remove 'uav_Anti_UAV_410_IR' prefix from all .txt files
    for file in uav_Anti_UAV_410_IR*.txt; do mv "$file" "${file#uav_Anti_UAV_410_IR}"; done
    ```
-4. Open `Anti-UAV410/Evaluation_for_paper_work.py`
+4. Open `Anti-UAV410/Evaluation_for_paper_work.py` and change `dataset_path` and `results_dir` to the correct paths
 5. Run the script 
 
 ```shell
