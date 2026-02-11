@@ -218,12 +218,4 @@ Load the last checkpoint by specifying the `--resume` argument:
 }
 
 
-@inproceedings{lin2024tracking,
-  title={Tracking meets lora: Faster training, larger model, stronger performance},
-  author={Lin, Liting and Fan, Heng and Zhang, Zhipeng and Wang, Yaowei and Xu, Yong and Ling, Haibin},
-  booktitle={European Conference on Computer Vision},
-  pages={300--318},
-  year={2024},
-  organization={Springer}
-}
 
