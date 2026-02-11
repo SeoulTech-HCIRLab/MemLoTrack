@@ -1,0 +1,12 @@
+filters: []
+
+datasets:
+  # - name: "Anti_UAV_300_VIS"
+  #   type: "SOT"
+  #   splits: "val"
+  # - name: "Anti_UAV_300_IR"
+  #   type: "SOT"
+  #   splits: "val"
+  - name: "Anti_UAV_410"
+    type: "SOT"
+    splits: "val"

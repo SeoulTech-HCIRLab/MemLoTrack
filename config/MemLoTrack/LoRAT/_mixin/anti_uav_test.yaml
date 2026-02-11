@@ -1,0 +1,102 @@
+# # ── TEST 단계 ──
+# - path: "run.data.test.source"
+#   value:
+#     type: "dataset"
+#     parameters:
+#       filters:
+#         - type: "data_cleaning.annotation_standard"
+#           parameters:
+#             bounding_box_format: "XYXY"
+#             bounding_box_coordinate_system: "Continuous"
+#         - type: "data_cleaning.bounding_box"
+#           parameters:
+#             fit_in_image_size: true
+#             update_validity: true
+#             remove_invalid_objects: true
+#             remove_empty_objects: true
+#         - type: "data_cleaning.integrity"
+#           parameters:
+#             remove_zero_annotation_objects: true
+#             remove_zero_annotation_image: true
+#             remove_zero_annotation_video_head_tail: true
+#             remove_invalid_image: true
+#       datasets:
+#         - name: "Anti_UAV_300_VIS"
+#           type: "SOT"
+#         - name: "Anti_UAV_300_IR"
+#           type: "SOT"
+#         - name: "Anti_UAV_410"
+#           type: "SOT"
+#         - name: "DUT_Tracking"
+#           type: "SOT"    
+# ── VAL 단계 ──
+- path: "run.data.val.source"
+  value:
+    type: "dataset"
+    parameters:
+      filters:
+        - type: "data_cleaning.annotation_standard"
+          parameters:
+            bounding_box_format: "XYXY"
+            bounding_box_coordinate_system: "Continuous"
+        - type: "data_cleaning.bounding_box"
+          parameters:
+            fit_in_image_size: true
+            update_validity: true
+            remove_invalid_objects: true
+            remove_empty_objects: true
+        - type: "data_cleaning.integrity"
+          parameters:
+            remove_zero_annotation_objects: true
+            remove_zero_annotation_image: true
+            remove_zero_annotation_video_head_tail: true
+            remove_invalid_image: true
+      datasets:
+        - name: "Anti_UAV_300_VIS"
+          type: "SOT"
+          splits: "val"
+        - name: "Anti_UAV_410"
+          type: "SOT"
+          splits: "val"
+
+          
+# ── EVAL 단계 ──
+- path: "run.data.eval.source"
+  value:
+    type: "dataset"
+    parameters:
+      filters:
+        - type: "data_cleaning.annotation_standard"
+          parameters:
+            bounding_box_format: "XYXY"
+            bounding_box_coordinate_system: "Continuous"
+        - type: "data_cleaning.bounding_box"
+          parameters:
+            fit_in_image_size: true
+            update_validity: true
+            remove_invalid_objects: true
+            remove_empty_objects: true
+        - type: "data_cleaning.integrity"
+          parameters:
+            remove_zero_annotation_objects: true
+            remove_zero_annotation_image: true
+            remove_zero_annotation_video_head_tail: true
+            remove_invalid_image: true
+      datasets:
+        # - name: "Anti_UAV_300_VIS"
+        #   type: "SOT"
+        #   splits: "test"
+        - name: "Anti_UAV_300_IR"
+          type: "SOT"
+          splits: "test"  
+
+        # - name: "Anti_UAV_410"
+        #   type: "SOT"
+        #   splits: "test"
+        # - name: "Anti_UAV_410"
+        #   type: "SOT"
+        #   splits: "test"
+        # - name: "DUT_Tracking"
+        #   type: "SOT"
+          
+

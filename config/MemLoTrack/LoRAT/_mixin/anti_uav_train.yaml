@@ -1,0 +1,42 @@
+  # config/MemLoTrack/_mixin/anti_uav_train.yaml
+
+  # ── TRAIN 단계: 데이터 클리닝 필터 추가 ──
+  - path: "run.data.train.source.parameters.filters"
+    value:
+      # 1) annotation_standard → 이미 XYXY로 들어오기 때문에 그대로 XYXY 처리
+      - type: "data_cleaning.annotation_standard"
+        parameters:
+          bounding_box_format: "XYXY"
+          bounding_box_coordinate_system: "Continuous"
+      # 2) bounding_box → 유효하지 않은 박스(0크기 등) 제거
+      - type: "data_cleaning.bounding_box"
+        parameters:
+          fit_in_image_size: true
+          update_validity: true
+          remove_invalid_objects: true
+          remove_empty_objects: true
+      # 3) integrity → 주석 없는 프레임/영상 제거
+      - type: "data_cleaning.integrity"
+        parameters:
+          remove_zero_annotation_objects: true
+          remove_zero_annotation_image: true
+          remove_zero_annotation_video_head_tail: true
+          remove_invalid_image: true
+
+  # ── TRAIN 단계: 실제 사용할 dataset 정의 ──
+  - path: "run.data.train.source.parameters.datasets"
+    value:
+      # - name: "Anti_UAV_300_VIS"
+      #   type: "SOT"
+      #   splits: "train"
+      # - name: "Anti_UAV_300_IR"
+      #   type: "SOT"
+      #   splits: "train"
+      - name: "Anti_UAV_410"
+        type: "SOT"
+        splits: "train"
+      # - name: "DUT_Detection"
+      #   type: "DET"
+      #   splits: "train"
+
+
