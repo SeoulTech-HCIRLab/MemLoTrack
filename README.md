@@ -11,9 +11,10 @@ We sincerely thank the LoRAT authors for making their excellent codebase publicl
 ![MemLoTrack Evaluation Pipeline](./assets/evaluation_pipeline.png)
 
 
-![weights](Download link) : https://drive.google.com/drive/folders/1cr2yX1UagM48qIuWzvYUSfl2V1CUZuAK?usp=sharing
 
 # Model weight  
+![weights](Download link) : https://drive.google.com/drive/folders/1cr2yX1UagM48qIuWzvYUSfl2V1CUZuAK?usp=sharing
+
 - `antiuav410_retrained_weight.bin` : We first pretrained the tracker on standard SOT benchmark datasets (e.g., LaSOT, TrackingNet, COCO 2017), and then fine-tuned it on Anti-UAV410.
 
 - `antiuav410_scratch_weight.bin` : Model trained from scratch on the Anti-UAV410 dataset
