@@ -135,6 +135,20 @@ Results are saved in ```/path/to/output/run_id/eval/epoch_{last}/```, where `run
 The `Anti-UAV410` files in this repository are based on the code from the official Anti-UAV410 GitHub repository: https://github.com/HwangBo94/Anti-UAV410
 
 ### Installation for SA Evaluation 
+
+
+**Step 0.** Switch Anti-UAV410 dataset definition for SA evaluation (required)
+
+Before running the official **State Accuracy (SA)** evaluation, you must switch the dataset constructor used by this repository.
+
+1. Open: `trackit/datasets/SOT/datasets/Anti_UAV_410.py`
+2. In that file, **enable (uncomment)** the code block for **SA evaluation**.
+3. And **disable (comment out)** the code block for **`AUC / P / P-Norm Results`**.
+4. Save the file and continue the steps below.
+
+> Note: This part is currently under refactoring.  
+> We plan to add a seed-based option/switch to avoid manual commenting/uncommenting.
+
 **Step 1.** Create a conda environment and activate it.
 ```shell
 conda create -n AntiUAV410 python=3.9.12
@@ -152,6 +166,7 @@ pip install torchvision===0.10.1 -f https://download.pytorch.org/whl/torch_stabl
 
 
 ### How to run State Accuaracy (SA) Evaluation:
+
 1. Unzip the `results.zip` file located in your specified output directory (`/path/to/output`).
 2. Move the extracted folder to:
    `/Anti-UAV410/Tracking_results/Trained_with_antiuav410`
