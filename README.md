@@ -167,16 +167,17 @@ pip install torchvision===0.10.1 -f https://download.pytorch.org/whl/torch_stabl
 
 ### How to run State Accuaracy (SA) Evaluation:
 
-1. Unzip the `results.zip` file located in your specified output directory (`/path/to/output`).
-2. Move the extracted folder to:
+1. Run the evaluation command. 
+2. Unzip the `results.zip` file located in your specified output directory (`/path/to/output`).
+3. Move the extracted folder to:
    `/Anti-UAV410/Tracking_results/Trained_with_antiuav410`
-3. **Rename Result Files:** The generated result files may have a prefix (e.g., `uav_Anti_UAV_410_IR_....txt`). You must remove this prefix for the evaluation script to recognize the files correctly. Run the following command inside the directory containing the result `.txt` files:
+4. **Rename Result Files:** The generated result files may have a prefix (e.g., `uav_Anti_UAV_410_IR_....txt`). You must remove this prefix for the evaluation script to recognize the files correctly. Run the following command inside the directory containing the result `.txt` files:
    ```shell
    # Remove 'uav_Anti_UAV_410_IR' prefix from all .txt files
    for file in uav_Anti_UAV_410_IR*.txt; do mv "$file" "${file#uav_Anti_UAV_410_IR}"; done
    ```
-4. Open `Anti-UAV410/Evaluation_for_paper_work.py` and change `dataset_path` and `results_dir` to the correct paths
-5. Run the script 
+5. Open `Anti-UAV410/Evaluation_for_paper_work.py` and change `dataset_path` and `results_dir` to the correct paths
+6. Run the script 
 
 ```shell
 python Evaluation_for_paper_work.py
