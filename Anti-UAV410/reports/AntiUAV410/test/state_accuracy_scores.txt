@@ -1,0 +1,22 @@
+[Overall]         Tracker name   Experiments metric: Scores
+[Overall]             AiATrack       State accuracy: 0.5956
+[Overall]                 ATOM       State accuracy: 0.5137
+[Overall]               DiMP50       State accuracy: 0.5666
+[Overall]           Super_DiMP       State accuracy: 0.5968
+[Overall]            KeepTrack       State accuracy: 0.5680
+[Overall]          Stark-ST101       State accuracy: 0.5715
+[Overall]       SwinTrack-Tiny       State accuracy: 0.5315
+[Overall]       SwinTrack-Base       State accuracy: 0.5574
+[Overall]              TCTrack       State accuracy: 0.4164
+[Overall]               ToMP50       State accuracy: 0.5509
+[Overall]              ToMP101       State accuracy: 0.5510
+[Overall]            DropTrack       State accuracy: 0.6015
+[Overall]        MixformerV2-B       State accuracy: 0.5965
+[Overall]     MemLoTrack(MB=1)       State accuracy: 0.6351
+[Overall]     MemLoTrack(MB=3)       State accuracy: 0.6374
+[Overall]     MemLoTrack(MB=7)       State accuracy: 0.6399
+[Overall]    MemLoTrack(MB=11)       State accuracy: 0.6427
+[Overall]           FocusTrack       State accuracy: 0.6389
+[Overall]             ROMTrack       State accuracy: 0.5572
+[Overall]            ZoomTrack       State accuracy: 0.5937
+[Overall]           LoRAT-Base       State accuracy: 0.6245
