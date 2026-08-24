@@ -1,7 +1,7 @@
 import os
 import io
 import zipfile
-from typing import Optional, Sequence
+from typing import Optional, Sequence, Tuple
 import numpy as np
 
 from trackit.core.operator.numpy.bbox.format import bbox_xyxy_to_xywh
@@ -50,16 +50,15 @@ def _infer_total_length(e: SequenceEvaluationResult_SOT) -> int:
     return int(idx.max()) + 1 if idx.size > 0 else 0
 
 
-def _align_full_xywh_with_dummy(e: SequenceEvaluationResult_SOT, pred_xyxy: Optional[np.ndarray]) -> np.ndarray:
+def _align_full_xywh(
+    e: SequenceEvaluationResult_SOT,
+    pred_xyxy: Optional[np.ndarray],
+) -> Tuple[np.ndarray, int]:
     T = _infer_total_length(e)
     out_xyxy = np.zeros((T, 4), dtype=np.float32)
     idx = np.asarray(e.evaluated_frame_indices, dtype=int)
     if pred_xyxy is not None and pred_xyxy.size > 0 and idx.size > 0:
         out_xyxy[idx] = pred_xyxy.astype(np.float32)[:len(idx)]
-    flag = e.groundtruth_object_existence_flag
-    if flag is not None and len(flag) == T:
-        exist = np.asarray(flag, dtype=bool)
-        out_xyxy[~exist] = 0.0
     return bbox_xyxy_to_xywh(out_xyxy).astype(np.float32), T
 
 
@@ -72,11 +71,7 @@ class TrackingNetResultFileWriter:
     def write(self, tracker_name: str, repeat_index: Optional[int],
               sequence_name: str, predicted_bboxes_xywh: np.ndarray, expected_len: int):
         with io.BytesIO() as result_file_content:
-            # 공백 구분(TrackingNet 기본 콤마지만, 요구에 따라 공백으로 통일)
             np.savetxt(result_file_content, predicted_bboxes_xywh.astype(np.float32), fmt='%.2f')
-            print(f"[DBG] TrackingNet write: {sequence_name}.txt lines={predicted_bboxes.shape[0]}", flush=True)
-
-
             if repeat_index not in self._zip_files:
                 if repeat_index is None:
                     zip_file_path = self._zip_file_path_prefix + '.zip'
@@ -90,8 +85,6 @@ class TrackingNetResultFileWriter:
             zip_file.writestr('/'.join((tracker_name, sequence_name, f'{sequence_name}.txt')),
                               result_file_content.getvalue())
 
-        # 디버그
-        print(f"[DUMMY-ENFORCER][TrackingNet] wrote {sequence_name}.txt: lines={predicted_bboxes_xywh.shape[0]} expected={expected_len}", flush=True)
         assert predicted_bboxes_xywh.shape[0] == expected_len, f"[TrackingNet] line-count mismatch: got {predicted_bboxes_xywh.shape[0]} vs expected {expected_len}"
 
     def close(self):
@@ -115,7 +108,7 @@ class TrackingNetEvaluationToolAdaptor(EvaluationResultHandler):
             if self._rasterize_bbox and pred_xyxy is not None:
                 pred_xyxy = bbox_rasterize(pred_xyxy)
 
-            pred_xywh_full, T = _align_full_xywh_with_dummy(e, pred_xyxy)
+            pred_xywh_full, T = _align_full_xywh(e, pred_xyxy)
 
             self._writer.write(self._tracker_name, repeat_index, e.sequence_info.sequence_name, pred_xywh_full, T)
 

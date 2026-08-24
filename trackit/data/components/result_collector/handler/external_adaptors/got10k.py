@@ -38,13 +38,9 @@ class GOT10kEvaluationToolFileWriter:
         assert (tracker_name, repeat_index, sequence_name) not in self._duplication_check, "duplicated sequence name detected"
         self._duplication_check.add((tracker_name, repeat_index, sequence_name))
 
-        # ===== bbox 파일 (공백 구분, 각 줄 4숫자, dummy 포함) =====
+        # ===== bbox file =====
         with io.BytesIO() as result_file_content:
-            # 구분자 명시하지 않음 → 공백만 사용됨
             np.savetxt(result_file_content, predicted_bboxes, fmt='%.3f')
-            print(f"[DBG] GOT10k write: {sequence_name}_{repeat_index + 1:03d}.txt lines={predicted_bboxes.shape[0]}", flush=True)
-
-
             self._zipfile.writestr(
                 '/'.join((tracker_name, sequence_name, f'{sequence_name}_{repeat_index + 1:03d}.txt')),
                 result_file_content.getvalue()
@@ -55,12 +51,10 @@ class GOT10kEvaluationToolFileWriter:
                     result_file_content.getvalue()
                 )
 
-        # ===== time 파일 (길이도 전프레임에 맞춤, 공백 구분) =====
+        # ===== time file =====
         if repeat_index == 0 or single_run_zipfile is not None:
             with io.BytesIO() as time_file_content:
                 np.savetxt(time_file_content, time_costs.astype(np.float32).reshape(-1), fmt='%.8f')
-                print(f"[DBG] GOT10k write: {sequence_name}_{repeat_index + 1:03d}.txt lines={predicted_bboxes.shape[0]}", flush=True)
-
                 if repeat_index == 0:
                     self._zipfile.writestr(
                         '/'.join((tracker_name, sequence_name, f'{sequence_name}_time.txt')),
@@ -95,7 +89,7 @@ def _infer_total_length(evaluation_result: SequenceEvaluationResult_SOT) -> int:
     return int(idx.max()) + 1 if idx.size > 0 else 0
 
 
-# ===== 내부 유틸: bbox/time을 프레임 전수로 정렬 + dummy 처리 =====
+# ===== Internal utility: align bbox/time arrays to represented frames =====
 def _build_full_xywh_and_time(evaluation_result: SequenceEvaluationResult_SOT,
                               predicted_bboxes_xyxy: Optional[np.ndarray]) -> tuple[np.ndarray, np.ndarray]:
     idx = np.asarray(evaluation_result.evaluated_frame_indices, dtype=int)
@@ -106,15 +100,9 @@ def _build_full_xywh_and_time(evaluation_result: SequenceEvaluationResult_SOT,
         # idx 길이에 맞춰 슬라이스 후 채움
         full_xyxy[idx] = predicted_bboxes_xyxy.astype(np.float32)[:len(idx)]
 
-    # 객체 미존재 프레임은 무조건 dummy(0 0 0 0)
-    flag = evaluation_result.groundtruth_object_existence_flag
-    if flag is not None and len(flag) == total:
-        exist = np.asarray(flag, dtype=bool)
-        full_xyxy[~exist] = 0.0
-
     full_xywh = bbox_xyxy_to_xywh(full_xyxy).astype(np.float32)
 
-    # time_cost도 전프레임으로 확장(미평가/미존재 프레임은 0)
+    # time_cost도 전프레임으로 확장(미평가 프레임은 0)
     tc = getattr(evaluation_result, 'time_cost', None)
     full_time = np.zeros((total,), dtype=np.float32)
     if tc is not None and np.size(tc) > 0 and idx.size > 0:

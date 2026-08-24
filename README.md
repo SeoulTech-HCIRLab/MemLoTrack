@@ -131,63 +131,57 @@ The evaluated datasets are defined in ```config/MemLoTrack/_mixin/anti_uav_test.
 
 Results are saved in ```/path/to/output/run_id/eval/epoch_{last}/```, where `run_id` is the current run ID, and `epoch_{last}` is the last epoch.
 
-## State Accuaracy (SA) Evaluation (Only for Anti-UAV410)
-The `Anti-UAV410` files in this repository are based on the code from the official Anti-UAV410 GitHub repository: https://github.com/HwangBo94/Anti-UAV410
+## State Accuracy (SA) Evaluation (Anti-UAV410 only)
 
-### Installation for SA Evaluation 
+The bundled evaluation code is based on the [official Anti-UAV410 repository](https://github.com/HwangBo94/Anti-UAV410).
 
+### Dataset evaluation modes
 
-**Step 0.** Switch Anti-UAV410 dataset definition for SA evaluation (required)
+`trackit/datasets/SOT/datasets/Anti_UAV_410.py` accepts an `evaluation_mode` seed parameter:
 
-Before running the official **State Accuracy (SA)** evaluation, you must switch the dataset constructor used by this repository.
+- `standard` (default): keeps valid target-present frames for the existing AUC, precision, and normalized-precision workflow.
+- `state_accuracy`: keeps every frame in its original order and marks target-absent frames with `validity=False`. This is required for SA evaluation.
 
-1. Open: `trackit/datasets/SOT/datasets/Anti_UAV_410.py`
-2. In that file, **enable (uncomment)** the code block for **SA evaluation**.
-3. And **disable (comment out)** the code block for **`AUC / P / P-Norm Results`**.
-4. Save the file and continue the steps below.
+Select the mode in a dataset configuration; no source-code commenting or uncommenting is required:
 
-> Note: This part is currently under refactoring.  
-> We plan to add a seed-based option/switch to avoid manual commenting/uncommenting.
-
-**Step 1.** Create a conda environment and activate it.
-```shell
-conda create -n AntiUAV410 python=3.9.12
-conda activate AntiUAV410
+```yaml
+- name: "Anti_UAV_410"
+  type: "SOT"
+  splits: "test"
+  parameters:
+    evaluation_mode: "state_accuracy"
 ```
 
-**Step 2.** 
-Install the requirements.
-```shell
-pip install opencv-python, matplotlib, wget, shapely
+The provided `config/MemLoTrack/_mixin/anti_uav_test.yaml` already enables this mode. Its SA evaluation source intentionally avoids filters that remove invalid or empty annotations, because those filters would delete target-absent frames and break frame alignment.
 
-pip install torch===1.9.1 -f https://download.pytorch.org/whl/torch_stable.html
-pip install torchvision===0.10.1 -f https://download.pytorch.org/whl/torch_stable.html
-```
-
-
-### How to run State Accuaracy (SA) Evaluation:
-
-1. Run the evaluation command. 
-2. Unzip the `results.zip` file located in your specified output directory (`/path/to/output`).
-3. Move the extracted folder to:
-   `/Anti-UAV410/Tracking_results/Trained_with_antiuav410`
-4. **Rename Result Files:** The generated result files may have a prefix (e.g., `uav_Anti_UAV_410_IR_....txt`). You must remove this prefix for the evaluation script to recognize the files correctly. Run the following command inside the directory containing the result `.txt` files:
-   ```shell
-   # Remove 'uav_Anti_UAV_410_IR' prefix from all .txt files
-   for file in uav_Anti_UAV_410_IR*.txt; do mv "$file" "${file#uav_Anti_UAV_410_IR}"; done
-   ```
-5. Open `Anti-UAV410/Evaluation_for_paper_work.py` and change `dataset_path` and `results_dir` to the correct paths
-6. Run the script 
+### Run tracking
 
 ```shell
-python Evaluation_for_paper_work.py
+./run.sh MemLoTrack dinov2 \
+  --output_dir /path/to/output \
+  --mixin evaluation \
+  --mixin anti_uav_test \
+  --weight_path /path/to/weight.bin
 ```
 
-After running the script, a consolidated PDF report for the trackers will be generated at:
-`Anti-UAV410/reports/AntiUAV410/test`.
+The result archive is written below `/path/to/output/<run_id>/eval/epoch_<last>/`. Extract `results.zip`; it contains a tracker directory with one `<sequence-name>.txt` file per Anti-UAV410 sequence. SA mode preserves the official sequence names, so no prefix-removal or file-renaming step is needed.
 
-For detailed instructions, please follow the official guide in the Anti-UAV410 repository:
-https://github.com/HwangBo94/Anti-UAV410
+### Calculate SA
+
+From the repository root, run:
+
+```shell
+python Anti-UAV410/Evaluation_for_SA.py \
+  --dataset-path /path/to/Anti-UAV410 \
+  --pred-path /path/to/extracted-results/<tracker-directory> \
+  --split test \
+  --mode 1 \
+  --output /path/to/eval_details.txt
+```
+
+`--mode 1` means XYWH predictions (the format produced by `results.zip`); use `--mode 2` for XYXY input. The evaluator requires the prediction and ground-truth frame counts to match. In text results, a box with non-positive width or height, including `0 0 0 0`, represents a target-absent prediction. For Anti-UAV410 SA-mode exports, annotated target-absent positions are encoded as `0 0 0 0`; a prediction/existence length mismatch raises an error instead of being silently truncated or padded.
+
+For the official multi-tracker plots and PDF report, configure `dataset_path`, `result_dir`, and tracker paths in `Anti-UAV410/Evaluation_for_paper_work.py` and `Anti-UAV410/utils/trackers.py`, then run that script from the `Anti-UAV410` directory.
 
 
 

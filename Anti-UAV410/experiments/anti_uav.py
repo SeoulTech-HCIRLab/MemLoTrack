@@ -10,6 +10,11 @@ from PIL import Image
 
 from datasets import AntiUAV410
 from utils.metrics import rect_iou, center_error
+from utils.state_accuracy import (
+    evaluate_state_accuracy,
+    intersection_over_union_xywh,
+    prediction_is_absent,
+)
 from utils.viz import show_frame
 
 
@@ -91,39 +96,13 @@ class ExperimentAntiUAV410(object):
         print('[Overall] Mixed Measure: %.03f\n' % (np.mean(overall_performance)))
 
     def iou(self, bbox1, bbox2):
-        bbox1 = [float(x) for x in bbox1]
-        bbox2 = [float(x) for x in bbox2]
-        (x0_1, y0_1, w1_1, h1_1) = bbox1
-        (x0_2, y0_2, w1_2, h1_2) = bbox2
-        x1_1 = x0_1 + w1_1; y1_1 = y0_1 + h1_1
-        x1_2 = x0_2 + w1_2; y1_2 = y0_2 + h1_2
-
-        ox0 = max(x0_1, x0_2); oy0 = max(y0_1, y0_2)
-        ox1 = min(x1_1, x1_2); oy1 = min(y1_1, y1_2)
-        if ox1 - ox0 <= 0 or oy1 - oy0 <= 0:
-            return 0.0
-        s1 = (x1_1 - x0_1) * (y1_1 - y0_1)
-        s2 = (x1_2 - x0_2) * (y1_2 - y0_2)
-        inter = (ox1 - ox0) * (oy1 - oy0)
-        union = s1 + s2 - inter
-        return inter / union if union > 0 else 0.0
+        return intersection_over_union_xywh(bbox1, bbox2)
 
     def not_exist(self, pred):
-        return 1.0 if (len(pred) in (0, 1)) else 0.0
+        return 1.0 if prediction_is_absent(pred) else 0.0
 
     def eval(self, out_res, label_res):
-        measure_per_frame = []
-        for _pred, _gt, _exist in zip(out_res, label_res['gt_rect'], label_res['exist']):
-            if not _exist:
-                measure_per_frame.append(self.not_exist(_pred))
-            else:
-                if len(_gt) < 4 or sum(_gt) == 0:
-                    continue
-                if len(_pred) == 4:
-                    measure_per_frame.append(self.iou(_pred, _gt))
-                else:
-                    measure_per_frame.append(0.0)
-        return np.mean(measure_per_frame)
+        return evaluate_state_accuracy(out_res, label_res)
 
     # ---------- report (OPE) ----------
     def report(self, trackers, plot_curves=True, plot_attcurves=True):

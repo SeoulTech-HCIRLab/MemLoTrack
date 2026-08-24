@@ -25,7 +25,7 @@ from ..utils.compatibility import ExternalToolkitCompatibilityHelper
 
 
 # =========================
-# Helpers (full-length + dummy)
+# Helpers (align results to the represented sequence)
 # =========================
 
 def _extract_length_from_sequence_info(si) -> Optional[int]:
@@ -76,7 +76,7 @@ def _expand_to_full_xyxy_time_conf(
     """
     Returns:
       full_idx  : (T,)   [0..T-1]
-      full_xyxy : (T,4)  predicted XYXY, un-evaluated frames = 0, non-exist frames forced to 0 0 0 0
+      full_xyxy : (T,4)  predicted XYXY, un-evaluated frames = 0
       full_xywh : (T,4)  converted from full_xyxy
       full_time : (T,)   padded with 0
       full_conf : (T,)   padded with 0
@@ -89,12 +89,6 @@ def _expand_to_full_xyxy_time_conf(
     full_xyxy = np.zeros((total, 4), dtype=(pred_xyxy.dtype if pred_xyxy is not None else np.float32))
     if pred_xyxy is not None and pred_xyxy.size > 0 and idx.size > 0:
         full_xyxy[idx] = pred_xyxy[: len(idx)]
-
-    # force dummy for non-exist frames
-    flag = e.groundtruth_object_existence_flag
-    if flag is not None and len(flag) == total:
-        exist = np.asarray(flag, dtype=bool)
-        full_xyxy[~exist] = 0.0
 
     # time
     full_time = np.zeros((total,), dtype=np.float32)
@@ -247,10 +241,11 @@ class EvaluationResultPersistenceWithOPEMetrics_ProgressAware:
             if self._rasterize_bbox and pred_xyxy is not None:
                 pred_xyxy = bbox_rasterize(pred_xyxy)
 
-            # === Force full-length + dummy ===
+            # Align outputs by their evaluated frame indices.
             full_idx, full_xyxy, full_xywh, full_time, full_conf = _expand_to_full_xyxy_time_conf(evaluation_result, pred_xyxy)
 
-            # Metrics with full-length predictions
+            # Metrics use predictions only; target existence is supplied as a
+            # separate mask and must never modify tracker output.
             metrics, frames_iou = compute_one_pass_evaluation_metrics(
                 evaluation_result.sequence_info.dataset_name,
                 full_xyxy,
@@ -295,7 +290,7 @@ class EvaluationResultPersistenceWithOPEMetrics_ProgressAware:
                     evaluation_result.sequence_info.sequence_name,
                     metrics
                 )
-                # And explicitly write {sequence}.txt (space-separated, full length, includes dummy)
+                # Also write {sequence}.txt for external toolkit consumption.
                 _write_sequence_txt_variants(
                     folder_writer,
                     tracker_name, repeat_index,
@@ -374,7 +369,7 @@ class EvaluationResultPersistenceWithOPEMetrics_LiveFeed:
             if self._rasterize_bbox and pred_xyxy is not None:
                 pred_xyxy = bbox_rasterize(pred_xyxy)
 
-            # Force full-length + dummy
+            # Align outputs by their evaluated frame indices.
             full_idx, full_xyxy, full_xywh, full_time, full_conf = _expand_to_full_xyxy_time_conf(evaluation_result, pred_xyxy)
 
             metrics, frames_iou = compute_one_pass_evaluation_metrics(

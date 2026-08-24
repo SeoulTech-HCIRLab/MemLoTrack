@@ -2,7 +2,6 @@ from typing import Optional, Mapping, Sequence, Tuple
 import itertools
 from dataclasses import dataclass
 from tabulate import tabulate
-import numpy as np  # ★ added
 
 from trackit.miscellanies.torch.distributed import is_main_process
 from trackit.core.runtime.metric_logger import get_current_metric_logger, get_current_local_metric_logger
@@ -16,6 +15,7 @@ from .progress_tracer.predefined import EvaluationTaskTracer_Predefined
 from .progress_tracer.plain import EvaluationTaskTracer_Plain
 from .handler import EvaluationResultHandlerAsyncWrapper
 from .progress_tracer import EvaluationTaskTracer
+from .state_accuracy import encode_antiuav410_state_accuracy_absence
 
 
 def print_metrics(metrics: Sequence[Tuple[str, float]], log_as_general_summary: bool):
@@ -30,114 +30,6 @@ def print_metrics(metrics: Sequence[Tuple[str, float]], log_as_general_summary: 
     print(tabulate(metrics.items(), headers=('metric', 'value'), floatfmt=".4f"), flush=True)
 
 
-# ===== Helper functions to expand to full sequence length with dummy bboxes =====
-
-def _extract_length_from_sequence_info(si) -> Optional[int]:
-    """
-    SequenceInfo의 '총 프레임 수' 필드를 이름 모를 때도 찾아냅니다.
-    1) 흔한 필드명 우선 검색
-    2) NamedTuple._fields를 통해 int 타입 필드 후보 중 가장 큰 값 선택
-    3) 시퀀스 객체가 순회 가능하면 int 항목 중 가장 큰 값 선택
-    """
-    # 1) 흔한 이름 우선
-    for name in ('sequence_length', 'track_length', 'length', 'num_frames', 'frame_count', 'nframes'):
-        if hasattr(si, name):
-            v = getattr(si, name)
-            if isinstance(v, (int, np.integer)) and v > 0:
-                return int(v)
-
-    # 2) NamedTuple 필드 스캔
-    if hasattr(si, '_fields'):
-        ints = []
-        for name in getattr(si, '_fields'):
-            try:
-                v = getattr(si, name)
-            except Exception:
-                continue
-            if isinstance(v, (int, np.integer)) and v > 0:
-                ints.append(int(v))
-        if len(ints) > 0:
-            return int(max(ints))
-
-    # 3) 순회 가능시 항목 스캔
-    try:
-        ints = [int(v) for v in si if isinstance(v, (int, np.integer)) and int(v) > 0]
-        if len(ints) > 0:
-            return int(max(ints))
-    except TypeError:
-        pass
-
-    return None
-
-
-def _infer_total_length_from_result(e: SequenceEvaluationResult_SOT) -> int:
-    # SequenceInfo에서 먼저 시도 (가장 신뢰도 높음: worker에서 len(track) 넣어줌)
-    si_len = _extract_length_from_sequence_info(e.sequence_info)
-    if si_len is not None:
-        return si_len
-
-    # GT 길이로 추정
-    if e.groundtruth_object_existence_flag is not None:
-        return int(len(e.groundtruth_object_existence_flag))
-    if e.groundtruth_box is not None:
-        return int(len(e.groundtruth_box))
-
-    # 마지막으로 평가된 인덱스 범위로 추정
-    idx = np.asarray(e.evaluated_frame_indices, dtype=int)
-    return int(idx.max()) + 1 if idx.size > 0 else 0
-
-
-def _expand_eval_result_to_full_length(e: SequenceEvaluationResult_SOT) -> SequenceEvaluationResult_SOT:
-    total = _infer_total_length_from_result(e)
-    full_idx = np.arange(total, dtype=int)
-
-    # --- output_box (XYXY) expand to full length ---
-    pred_xyxy = e.output_box
-    idx = np.asarray(e.evaluated_frame_indices, dtype=int)
-    full_box = np.zeros((total, 4), dtype=(pred_xyxy.dtype if pred_xyxy is not None else np.float32))
-    if pred_xyxy is not None and pred_xyxy.size > 0 and idx.size > 0:
-        full_box[idx] = pred_xyxy[:len(idx)]
-
-    # 객체 미존재 프레임은 무조건 0 0 0 0 (dummy)
-    flag = e.groundtruth_object_existence_flag
-    if flag is not None and len(flag) == total:
-        exist = np.asarray(flag, dtype=bool)
-        full_box[~exist] = 0.0
-
-    # --- output_confidence expand ---
-    conf = e.output_confidence
-    full_conf = np.zeros((total,), dtype=(conf.dtype if conf is not None else np.float32))
-    if conf is not None and np.size(conf) > 0 and idx.size > 0:
-        full_conf[idx] = np.asarray(conf).reshape(-1)[:len(idx)]
-
-    # --- time_cost expand ---
-    tc = e.time_cost
-    full_time = np.zeros((total,), dtype=np.float32)
-    if tc is not None and np.size(tc) > 0 and idx.size > 0:
-        full_time[idx] = np.asarray(tc, dtype=np.float32).reshape(-1)[:len(idx)]
-
-    # --- batch_size expand (형태 맞춤) ---
-    bs = e.batch_size
-    full_bs = np.zeros((total,), dtype=(bs.dtype if bs is not None else np.int32))
-    if bs is not None and np.size(bs) > 0 and idx.size > 0:
-        full_bs[idx] = np.asarray(bs).reshape(-1)[:len(idx)]
-
-    # 새 NamedTuple로 교체(전 구간 인덱스/출력으로 정규화)
-    return SequenceEvaluationResult_SOT(
-        id=e.id,
-        sequence_info=e.sequence_info,
-        evaluated_frame_indices=full_idx,
-        groundtruth_box=e.groundtruth_box,
-        groundtruth_object_existence_flag=e.groundtruth_object_existence_flag,
-        groundtruth_mask=e.groundtruth_mask,
-        output_box=full_box,
-        output_confidence=full_conf,
-        output_mask=e.output_mask,
-        time_cost=full_time,
-        batch_size=full_bs,
-    )
-
-
 class EvaluationResultCollector:
     def __init__(self, progress_tracer: EvaluationTaskTracer,
                  dispatcher: Mapping[DataSourceMatcher, Sequence[EvaluationResultHandlerAsyncWrapper]],
@@ -147,8 +39,10 @@ class EvaluationResultCollector:
         self._log_summary = log_summary
 
     def collect(self, evaluation_results: Sequence[SequenceEvaluationResult_SOT]):
-        # ★ 상류에서 전 프레임 길이로 강제 확장 + dummy 채움 (모든 핸들러에 일괄 적용)
-        evaluation_results = tuple(_expand_eval_result_to_full_length(e) for e in evaluation_results)
+        evaluation_results = tuple(
+            encode_antiuav410_state_accuracy_absence(evaluation_result)
+            for evaluation_result in evaluation_results
+        )
 
         progresses = tuple(self._progress_tracer.submit(
             evaluation_result.sequence_info.dataset_full_name,

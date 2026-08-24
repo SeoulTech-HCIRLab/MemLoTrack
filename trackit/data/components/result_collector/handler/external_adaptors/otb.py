@@ -1,4 +1,4 @@
-from typing import Optional, Sequence
+from typing import Optional, Sequence, Tuple
 import zipfile
 import io
 import os
@@ -27,14 +27,8 @@ class OTBEvaluationToolTrackingResultWriter:
         else:
             tracker_folder_path += '_tracking_result'
         with io.StringIO() as f:
-            # 공백 구분(괄호/콤마 없음)
             np.savetxt(f, predicted_bboxes_xywh.astype(np.float32), fmt='%.3f')
-            print(f"[DBG] OTB write: {sequence_name}.txt lines={predicted_bboxes.shape[0]}", flush=True)
-
-
             self._zip_file.writestr(f'{tracker_folder_path}/{sequence_name}.txt', f.getvalue())
-        # 디버그
-        print(f"[DUMMY-ENFORCER][OTB] wrote {sequence_name}.txt: lines={predicted_bboxes_xywh.shape[0]} expected={expected_len}", flush=True)
         assert predicted_bboxes_xywh.shape[0] == expected_len, f"[OTB] line-count mismatch: got {predicted_bboxes_xywh.shape[0]} vs expected {expected_len}"
 
     def close(self):
@@ -79,16 +73,15 @@ def _infer_total_length(e: SequenceEvaluationResult_SOT) -> int:
     return int(idx.max()) + 1 if idx.size > 0 else 0
 
 
-def _align_full_xywh_with_dummy(e: SequenceEvaluationResult_SOT, pred_xyxy: Optional[np.ndarray]) -> np.ndarray:
+def _align_full_xywh(
+    e: SequenceEvaluationResult_SOT,
+    pred_xyxy: Optional[np.ndarray],
+) -> Tuple[np.ndarray, int]:
     T = _infer_total_length(e)
     out_xyxy = np.zeros((T, 4), dtype=np.float32)
     idx = np.asarray(e.evaluated_frame_indices, dtype=int)
     if pred_xyxy is not None and pred_xyxy.size > 0 and idx.size > 0:
         out_xyxy[idx] = pred_xyxy.astype(np.float32)[:len(idx)]
-    flag = e.groundtruth_object_existence_flag
-    if flag is not None and len(flag) == T:
-        exist = np.asarray(flag, dtype=bool)
-        out_xyxy[~exist] = 0.0
     return bbox_xyxy_to_xywh(out_xyxy).astype(np.float32), T
 
 
@@ -110,7 +103,7 @@ class OTBEvaluationToolAdaptor(EvaluationResultHandler):
             if self._rasterize_bbox and pred_xyxy is not None:
                 pred_xyxy = bbox_rasterize(pred_xyxy)
 
-            pred_xywh_full, T = _align_full_xywh_with_dummy(e, pred_xyxy)
+            pred_xywh_full, T = _align_full_xywh(e, pred_xyxy)
 
             repeat_index = prog.repeat_index
             if prog.this_dataset is not None:

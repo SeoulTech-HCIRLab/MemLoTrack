@@ -1,163 +1,130 @@
-
-from __future__ import absolute_import
-import os
-import glob
-import json
-import cv2
-import numpy as np
+import argparse
 import io
+import json
+from pathlib import Path
+from typing import Sequence
 
-"""
-Experiments Setup
-"""
-# set the dataset path
-dataset_path = 'path/to/Anti-UAV410'
-# set 'test' or 'val' for evaluation
-evaluation_mode = 'test'
-# set the path for the predicted tracking results
-pred_path = './Tracking_results/Trained_with_antiuav410/SiamDT/'
+import numpy as np
 
-
-# mode 1 means the results is formatted by (x,y,w,h)
-# mode 2 means the results is formatted by (x1,y1,x2,y2)
-mode = 1
-
-def iou(bbox1, bbox2):
-    """
-    Calculates the intersection-over-union of two bounding boxes.
-    Args:
-        bbox1 (numpy.array, list of floats): bounding box in format x,y,w,h.
-        bbox2 (numpy.array, list of floats): bounding box in format x,y,w,h.
-    Returns:
-        int: intersection-over-onion of bbox1, bbox2
-    """
-    bbox1 = [float(x) for x in bbox1]
-    bbox2 = [float(x) for x in bbox2]
-
-    (x0_1, y0_1, w1_1, h1_1) = bbox1
-    (x0_2, y0_2, w1_2, h1_2) = bbox2
-    x1_1 = x0_1 + w1_1
-    x1_2 = x0_2 + w1_2
-    y1_1 = y0_1 + h1_1
-    y1_2 = y0_2 + h1_2
-    # get the overlap rectangle
-    overlap_x0 = max(x0_1, x0_2)
-    overlap_y0 = max(y0_1, y0_2)
-    overlap_x1 = min(x1_1, x1_2)
-    overlap_y1 = min(y1_1, y1_2)
-
-    # check if there is an overlap
-    if overlap_x1 - overlap_x0 <= 0 or overlap_y1 - overlap_y0 <= 0:
-        return 0
-
-    # if yes, calculate the ratio of the overlap to each ROI size and the unified size
-    size_1 = (x1_1 - x0_1) * (y1_1 - y0_1)
-    size_2 = (x1_2 - x0_2) * (y1_2 - y0_2)
-    size_intersection = (overlap_x1 - overlap_x0) * (overlap_y1 - overlap_y0)
-    size_union = size_1 + size_2 - size_intersection
-
-    return size_intersection / size_union
+from utils.state_accuracy import (
+    convert_xyxy_predictions_to_xywh,
+    evaluate_state_accuracy,
+)
 
 
-def not_exist(pred):
-
-    if len(pred) == 1 or len(pred) == 0:
-        return 1.0
-    else:
-        return 0.0
-
-
-
-def eval(out_res, label_res):
-
-    measure_per_frame = []
-
-    for _pred, _gt, _exist in zip(out_res, label_res['gt_rect'], label_res['exist']):
-
-        if not _exist:
-            measure_per_frame.append(not_exist(_pred))
-        else:
-
-            if len(_gt)<4 or sum(_gt)==0:
-                continue
-
-            if len(_pred)==4:
-                measure_per_frame.append(iou(_pred, _gt))
-            else:
-                measure_per_frame.append(0.0)
-
-            # try:
-            #     measure_per_frame.append(iou(_pred, _gt))
-            # except:
-            #     measure_per_frame.append(0)
-
-
-        # measure_per_frame.append(not_exist(_pred) if not _exist else iou(_pred, _gt))
+def _parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(
+        description='Evaluate Anti-UAV410 State Accuracy from tracker result files.'
+    )
+    parser.add_argument(
+        '--dataset-path',
+        type=Path,
+        required=True,
+        help='Anti-UAV410 root directory containing test/ and/or val/.',
+    )
+    parser.add_argument(
+        '--pred-path',
+        type=Path,
+        required=True,
+        help='Directory containing one <sequence-name>.txt result per sequence.',
+    )
+    parser.add_argument('--split', choices=('test', 'val'), default='test')
+    parser.add_argument(
+        '--mode',
+        type=int,
+        choices=(1, 2),
+        default=1,
+        help='Prediction format: 1=XYWH, 2=XYXY.',
+    )
+    parser.add_argument(
+        '--output',
+        type=Path,
+        default=Path('eval_details.txt'),
+        help='Path for the per-sequence and overall score report.',
+    )
+    return parser.parse_args()
 
 
-    return np.mean(measure_per_frame)
+def _load_predictions(result_path: Path) -> Sequence:
+    if not result_path.is_file():
+        raise FileNotFoundError(f'Missing prediction file: {result_path}')
+
+    text = result_path.read_text(encoding='utf-8').strip()
+    if not text:
+        return []
+
+    try:
+        parsed = json.loads(text)
+    except json.JSONDecodeError:
+        values = np.loadtxt(io.StringIO(text.replace(',', ' ')), dtype=float)
+        if values.size == 0:
+            return []
+        if values.ndim == 1:
+            return [values.tolist()]
+        return values.tolist()
+
+    if isinstance(parsed, dict):
+        if 'res' not in parsed:
+            raise ValueError(f'JSON prediction file has no "res" field: {result_path}')
+        parsed = parsed['res']
+    if not isinstance(parsed, list):
+        raise ValueError(f'Unsupported prediction JSON in {result_path}')
+    return parsed
 
 
+def evaluate_directory(
+    dataset_path: Path,
+    prediction_path: Path,
+    split: str,
+    mode: int,
+    output_path: Path,
+) -> float:
+    split_path = dataset_path / split
+    label_files = sorted(split_path.glob('*/IR_label.json'))
+    if not label_files:
+        raise FileNotFoundError(f'No IR_label.json files found under {split_path}')
+
+    report_lines = []
+    sequence_scores = []
+    sequence_count = len(label_files)
+
+    for sequence_index, label_path in enumerate(label_files, start=1):
+        sequence_name = label_path.parent.name
+        with label_path.open('r', encoding='utf-8') as file:
+            labels = json.load(file)
+
+        predictions = _load_predictions(prediction_path / f'{sequence_name}.txt')
+        if mode == 2:
+            predictions = convert_xyxy_predictions_to_xywh(predictions)
+
+        score = evaluate_state_accuracy(predictions, labels)
+        sequence_scores.append(score)
+        line = (
+            f'[{sequence_index:03d}/{sequence_count:03d}] '
+            f'{sequence_name:>25} {"SA Score":>15}: {score:.04f}'
+        )
+        report_lines.append(line)
+        print(line)
+
+    overall_score = float(np.mean(sequence_scores))
+    overall_line = f'[Overall] {"------":>25} {"SA Score":>15}: {overall_score:.04f}'
+    report_lines.append(overall_line)
+    print(overall_line)
+
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    output_path.write_text('\n'.join(report_lines) + '\n', encoding='utf-8')
+    return overall_score
 
 
-def main():
-
-    evaluation_metrics=['SA Score', 'P Score', 'AUC Score']
-
-    datasetpath = dataset_path + evaluation_mode
-
-
-    label_files = sorted(glob.glob(
-        os.path.join(datasetpath, '*/IR_label.json')))
-
-    video_num = len(label_files)
-    overall_performance = []
-
-
-    if (os.path.exists('eval_details.txt')):
-        os.remove('eval_details.txt')
-
-    for video_id, label_file in enumerate(label_files, start=1):
-
-        video_name = os.path.basename(label_file)
-
-        with open(label_file, 'r') as f:
-            label_res = json.load(f)
-
-        video_dirs=os.path.dirname(label_file)
-
-        video_dirsbase = os.path.basename(video_dirs)
-
-        pred_file = os.path.join(pred_path, video_dirsbase+'.txt')
-
-
-        try:
-            with open(pred_file, 'r') as f:
-                pred_res = json.load(f)
-                pred_res=pred_res['res']
-        except:
-            with open(pred_file, 'r') as f:
-                pred_res = np.loadtxt(io.StringIO(f.read().replace(',', ' ')))
-
-
-        if mode==1:
-            pass
-        else:
-            pred_res[:, 2:] = pred_res[:, 2:] - pred_res[:, :2] + 1
-
-        SA_Score = eval(pred_res, label_res)
-        overall_performance.append(SA_Score)
-
-        text = '[%03d/%03d] %25s %15s: %.04f' % (video_id, video_num, video_dirsbase, evaluation_metrics[0], SA_Score)
-        with open('eval_details.txt', 'a', encoding='utf-8') as f:
-            f.write(text)
-            f.write('\n')
-        print(text)
-
-    text='[Overall] %25s %15s: %.04f\n' % ('------', evaluation_metrics[0], np.mean(overall_performance))
-    with open('eval_details.txt', 'a', encoding='utf-8') as f:
-        f.write(text)
-    print(text)
+def main() -> None:
+    args = _parse_args()
+    evaluate_directory(
+        args.dataset_path,
+        args.pred_path,
+        args.split,
+        args.mode,
+        args.output,
+    )
 
 
 if __name__ == '__main__':

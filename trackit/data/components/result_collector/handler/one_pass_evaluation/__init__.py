@@ -58,7 +58,7 @@ def _infer_total_length(e: SequenceEvaluationResult_SOT) -> int:
     idx = np.asarray(e.evaluated_frame_indices, dtype=int)
     return int(idx.max()) + 1 if idx.size > 0 else 0
 
-# ===== Helper: 예측/시간/컨피던스 풀-길이 확장 + dummy 채움 =====
+# ===== Helper: align prediction/time/confidence arrays to sequence length =====
 def _build_full_arrays(
     e: SequenceEvaluationResult_SOT,
     pred_xyxy: Optional[np.ndarray],
@@ -66,7 +66,7 @@ def _build_full_arrays(
     """
     Returns:
       full_idx  : (T,)  = [0..T-1]
-      full_xyxy : (T,4) = 미평가 프레임 0, 미존재 프레임 0 0 0 0
+      full_xyxy : (T,4) = 미평가 프레임 0
       full_time : (T,)
       full_conf : (T,)
     """
@@ -78,12 +78,6 @@ def _build_full_arrays(
     idx = np.asarray(e.evaluated_frame_indices, dtype=int)
     if pred_xyxy is not None and pred_xyxy.size > 0 and idx.size > 0:
         full_xyxy[idx] = pred_xyxy[: len(idx)]
-
-    # 객체 미존재 프레임은 무조건 dummy(0 0 0 0)
-    flag = e.groundtruth_object_existence_flag
-    if flag is not None and len(flag) == total:
-        exist = np.asarray(flag, dtype=bool)
-        full_xyxy[~exist] = 0.0
 
     # time
     full_time = np.zeros((total,), dtype=np.float32)

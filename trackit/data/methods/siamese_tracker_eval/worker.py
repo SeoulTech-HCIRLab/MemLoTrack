@@ -22,26 +22,12 @@ def _prepare_frame_context(frame: TrackingDataset_FrameInTrack):
     return SiameseTrackerEvalDataWorker_FrameContext(frame.get_frame_index(), image_getter_fn, gt_bbox)
 
 
-# === 추가: 시퀀스 총 프레임 수 안전 추출기 ===
-
-def _safe_sequence_total_length(sequence, track):
-    # A) 트랙 내부 프레임의 원본 frame_index 최댓값+1 (중간 non-exist 포함 복원)
+def _get_sequence_total_length(sequence, track) -> int:
+    """Return the number of frames represented by the constructed sequence."""
     try:
-        n = len(track)
-        if n > 0 and hasattr(track[0], 'get_frame_index'):
-            max_idx = -1
-            min_idx = 1 << 30
-            for i in range(n):
-                fi = track[i].get_frame_index()
-                if isinstance(fi, int):
-                    if fi > max_idx: max_idx = fi
-                    if fi < min_idx: min_idx = fi
-            if max_idx >= 0:
-                total_len = (max_idx - (min_idx if min_idx >= 0 else 0)) + 1
-                if total_len > n:
-                    return int(total_len)
-    except Exception:
-        pass
+        return len(sequence)
+    except TypeError:
+        return len(track)
 
 
 def _prepare(batch_index: int, evaluation_task: EvaluationTask, datasets: Sequence[TrackingDataset]):
@@ -49,7 +35,7 @@ def _prepare(batch_index: int, evaluation_task: EvaluationTask, datasets: Sequen
     sequence = dataset[evaluation_task.sequence_index]
     track = sequence.get_track_by_id(evaluation_task.track_id)
 
-    total_len = _safe_sequence_total_length(sequence, track)
+    total_len = _get_sequence_total_length(sequence, track)
     track_context = SequenceInfo(
         dataset.get_name(),
         dataset.get_data_split(),

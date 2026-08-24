@@ -22,6 +22,19 @@ _builtin_rules = (
             'rasterize': False,
         }
     }, {
+        # Anti-UAV410 SA mode uses official raw sequence names, while standard
+        # mode retains the historical PyTracking-compatible prefix.
+        'match': {
+            'name': 'Anti_UAV_410',
+        },
+        'action': {
+            'rasterize': False,
+            # Standard mode retains the repository's historical prefixed
+            # sequence names. State-accuracy mode uses official raw names.
+            'name_prefix': 'uav_',
+            'name_prefix_if_sequence_startswith': 'Anti_UAV_410_',
+        }
+    }, {
         'match': {
             'name_regex': 'UAV',
         },
@@ -97,7 +110,11 @@ class ExternalToolkitCompatibilityHelper:
         if adjustment_actions.get('rasterize', False):
             predicted_bboxes = bbox_rasterize(predicted_bboxes)
         if 'name_prefix' in adjustment_actions and sequence_name is not None:
-            sequence_name = adjustment_actions['name_prefix'] + sequence_name
+            required_prefix = adjustment_actions.get(
+                'name_prefix_if_sequence_startswith'
+            )
+            if required_prefix is None or sequence_name.startswith(required_prefix):
+                sequence_name = adjustment_actions['name_prefix'] + sequence_name
         if sequence_name is not None:
             return sequence_name, predicted_bboxes
         return predicted_bboxes

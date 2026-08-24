@@ -22,7 +22,7 @@ def _infer_total_length(
     return int(idx.max()) + 1 if idx.size > 0 else 0
 
 
-def _build_full_xyxy_with_dummy(
+def _align_full_xyxy(
     frame_indices: np.ndarray,
     predicted_bboxes_xyxy: Optional[np.ndarray],
     groundtruth_object_existence: Optional[np.ndarray],
@@ -34,11 +34,6 @@ def _build_full_xyxy_with_dummy(
     if predicted_bboxes_xyxy is not None and np.size(predicted_bboxes_xyxy) > 0:
         idx = np.asarray(frame_indices, dtype=int)
         full_xyxy[idx] = np.asarray(predicted_bboxes_xyxy, dtype=np.float32)[: len(idx)]
-
-    # 객체 미존재 프레임은 무조건 dummy(0 0 0 0)
-    if groundtruth_object_existence is not None and len(groundtruth_object_existence) == total:
-        exist = np.asarray(groundtruth_object_existence, dtype=bool)
-        full_xyxy[~exist] = 0.0
 
     return full_xyxy
 
@@ -58,7 +53,7 @@ def dump_sequence_tracking_results_with_groundtruth(folder_writer: FolderWriter,
     기존 기능(픽클/CSV) + 추가 기능:
     - {sequence_name}.txt 를 항상 생성
     - txt는 전체 프레임 길이와 동일한 줄 수
-    - 객체 미존재 프레임은 0 0 0 0 (공백 구분, 괄호/콤마 없음)
+    - 미평가 프레임은 0 0 0 0 (공백 구분, 괄호/콤마 없음)
     """
     path = (tracker_name if repeat_index is None else f'{tracker_name}_{repeat_index:03d}', dataset_name, sequence_name)
 
@@ -111,21 +106,19 @@ def dump_sequence_tracking_results_with_groundtruth(folder_writer: FolderWriter,
                                     'gt_y', 'gt_w', 'gt_h', 'iou')))
 
     # === TXT (신규 추가): 전체 프레임 + dummy 반영 ===
-    full_xyxy = _build_full_xyxy_with_dummy(frame_indices, predicted_bboxes,
-                                            groundtruth_object_existence, groundtruth_bounding_boxes)
+    full_xyxy = _align_full_xyxy(frame_indices, predicted_bboxes,
+                                 groundtruth_object_existence, groundtruth_bounding_boxes)
     full_xywh = bbox_xyxy_to_xywh(full_xyxy).astype(np.float32)
 
     # 툴킷 스타일 경로: <tracker or tracker_###>/<dataset>/<sequence>/<sequence>.txt
     with folder_writer.open_text_file_handle((*path, f'{sequence_name}.txt')) as f:
         # 공백 구분, 괄호/콤마 없음
         np.savetxt(f, full_xywh, fmt='%.3f')
-        print(f"[DBG] OPE(report_gen) write: {dataset_name}/{sequence_name}.txt lines={full_xywh.shape[0]}", flush=True)
 
 
     # 루트 레벨에도 {sequence}.txt 추가 저장 (일부 파이프라인이 이 경로만 읽을 수 있음)
     with folder_writer.open_text_file_handle((f'{sequence_name}.txt',)) as f:
         np.savetxt(f, full_xywh, fmt='%.3f')
-        print(f"[DBG] OPE(report_gen) write: {dataset_name}/{sequence_name}.txt lines={full_xywh.shape[0]}", flush=True)
 
 
 
